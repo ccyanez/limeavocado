@@ -4,7 +4,7 @@
 # See README.txt file for definition of data levels
 
 # User inputs -------------------------------------------------------------
-routeID <- "20210715" # enter routeID for survey
+routeID <- "20190715" # enter routeID for survey
 main <- '~/UCR LIME AVOCADO/Data/' # main path to data, all other paths are relative to this one
 logFile <- paste(main, 'logs2.xlsx', sep='') # path to log file with metadata
 raw_file_path <- paste(main, 'raw/Picarro G2401/', sep = '') # input path to raw Picarro files
