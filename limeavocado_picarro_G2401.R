@@ -5,7 +5,7 @@
 
 # User inputs -------------------------------------------------------------
 routeID <- "20190715" # enter routeID for survey
-main <- '~/UCR LIME AVOCADO/Data/' # main path to data, all other paths are relative to this one
+main <- '/Volumes/Seagate Expansion Drive/ucrlimeavocado/Data/' # main path to data, all other paths are relative to this one
 logFile <- paste(main, 'logs2.xlsx', sep='') # path to log file with metadata
 raw_file_path <- paste(main, 'raw/Picarro G2401/', sep = '') # input path to raw Picarro files
 v1_file_path <- paste(main, 'processed/Level01/Picarro G2401/', sep='') # output path for Level 1 files
@@ -20,7 +20,7 @@ library(stringr)
 library(dplyr)
 library(readxl)
 library(purrr)
-source('~/UCR LIME AVOCADO/limeavocado/limeavocado_functions.R')
+source('~/limeavocado/limeavocado_functions.R')
 
 # Level 1 Processing ------------------------------------------------------------
 surveyInfo = read_excel(logFile, sheet = 'GENERAL') %>% filter(ID == routeID) # import general survey information from log file
@@ -37,8 +37,22 @@ picarro_gps_weather <- merge_picarro_datalogger(picarro_v2, surveyInfo$GPSFILE, 
 
 # CALIBRATE ---------------------------------------------------------------
 calInfo <- read_excel(logFile, sheet = 'CALESTIMATES') %>% filter(ID == routeID) # load the calibration information
-calInfo$T1 <- as.POSIXct(paste(calInfo$DATE, calInfo$T1), tz ='America/Los_Angeles') # convert start times to datetime format
-calInfo$T2 <- as.POSIXct(paste(calInfo$DATE, calInfo$T2), tz ='America/Los_Angeles') # convert end times to datetime format
+
+for (i in 1:nrow(calInfo)) {
+  if (calInfo$STANDARD_ID[i] == "EXT") {
+    print("You need an external file")
+    # future somehow load the external file
+  }
+  else {
+    calInfo$T1[i] <- paste(calInfo$DATE[i], calInfo$T1[i]) # convert start times to datetime format
+    calInfo$T2[i] <- paste(calInfo$DATE[i], calInfo$T2[i]) # convert end times to datetime format
+    
+    print("I fixed the date formatting")
+  }
+}
+
+calInfo$T1 <- as.POSIXct(calInfo$T1, tz ='America/Los_Angeles') # convert start times to datetime format
+calInfo$T2 <- as.POSIXct(calInfo$T2, tz ='America/Los_Angeles') # convert end times to datetime format
 
 picarro_cals <- picarro_v2[setDT(calInfo), on = .(TIMESTAMP >= T1, TIMESTAMP <= T2), # subsets picarro data that is in calibration times
                    `:=`(STANDARD_ID = STANDARD_ID)] %>% drop_na(STANDARD_ID) # appends STANDARD_ID column
