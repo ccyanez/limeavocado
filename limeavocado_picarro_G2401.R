@@ -1,6 +1,6 @@
 ## Script for processing of Picarro G2401 data 
 ## Author: Cindy Yanez
-## Last revised: Oct. 1, 2021
+## Last revised: Oct. 21, 2021
 # See README.txt file for definition of data levels
 
 # User inputs -------------------------------------------------------------
@@ -20,7 +20,7 @@ library(stringr)
 library(dplyr)
 library(readxl)
 library(purrr)
-source('~/UCR LIME AVOCADO/Scripts/R/limeavocado_functions.R')
+source('~/UCR LIME AVOCADO/limeavocado/limeavocado_functions.R')
 
 # Level 1 Processing ------------------------------------------------------------
 surveyInfo = read_excel(logFile, sheet = 'GENERAL') %>% filter(ID == routeID) # import general survey information from log file
@@ -36,7 +36,7 @@ picarro_gps_weather <- merge_picarro_datalogger(picarro_v2, surveyInfo$GPSFILE, 
   select(-c(CH4, CO2)) %>% rename(CH4 = CH4_dry, CO2 = CO2_dry) # from here on, only use the CO2_dry and CH4_dry columns, they are renamed to CO2 and CH4
 
 # CALIBRATE ---------------------------------------------------------------
-calInfo <- read_excel(logFile, sheet = 'CALIBRATIONS') %>% filter(ID == routeID) # load the calibration information
+calInfo <- read_excel(logFile, sheet = 'CALESTIMATES') %>% filter(ID == routeID) # load the calibration information
 calInfo$T1 <- as.POSIXct(paste(calInfo$DATE, calInfo$T1), tz ='America/Los_Angeles') # convert start times to datetime format
 calInfo$T2 <- as.POSIXct(paste(calInfo$DATE, calInfo$T2), tz ='America/Los_Angeles') # convert end times to datetime format
 
