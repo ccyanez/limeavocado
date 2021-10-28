@@ -11,6 +11,8 @@ raw_file_path <- paste(main, 'raw/Picarro G2401/', sep = '') # input path to raw
 v1_file_path <- paste(main, 'processed/Level01/Picarro G2401/', sep='') # output path for Level 1 files
 v2_file_path <- paste(main, 'processed/Level02/Picarro G2401/', sep='') # output path for Level 2 files
 calSum_file_path <- paste(main, 'processed/calibration_summary/', sep='') # output path for calibration summary files
+v3_file_path <- paste(main, 'processed/Level03/Picarro G2401/', sep='') # output path for Level 3 files
+qaqc_file_path <- paste(main,'QAQC/Picarro G2401/',sep='') # output path for quality control report
 
 # Libraries ---------------------------------------------------------------
 library(data.table)
@@ -20,7 +22,9 @@ library(stringr)
 library(dplyr)
 library(readxl)
 library(purrr)
-source('~/limeavocado/limeavocado_functions.R')
+source('~/UCR LIME AVOCADO/limeavocado/limeavocado_functions.R')
+source('~/UCR LIME AVOCADO/limeavocado/get_calib_values.R')
+source('~/UCR LIME AVOCADO/limeavocado/calibrate.R')
 
 # Level 1 Processing ------------------------------------------------------------
 surveyInfo = read_excel(logFile, sheet = 'GENERAL') %>% filter(ID == routeID) # import general survey information from log file
@@ -38,34 +42,12 @@ picarro_gps_weather <- merge_picarro_datalogger(picarro_v2, surveyInfo$GPSFILE, 
 # CALIBRATE ---------------------------------------------------------------
 calInfo <- read_excel(logFile, sheet = 'CALESTIMATES') %>% filter(ID == routeID) # load the calibration information
 
-for (i in 1:nrow(calInfo)) {
-  if (calInfo$STANDARD_ID[i] == "EXT") {
-    print("You need an external file")
-    # future somehow load the external file
-  }
-  else {
-    calInfo$T1[i] <- paste(calInfo$DATE[i], calInfo$T1[i]) # convert start times to datetime format
-    calInfo$T2[i] <- paste(calInfo$DATE[i], calInfo$T2[i]) # convert end times to datetime format
-    
-    print("I fixed the date formatting")
-  }
-}
-
-calInfo$T1 <- as.POSIXct(calInfo$T1, tz ='America/Los_Angeles') # convert start times to datetime format
-calInfo$T2 <- as.POSIXct(calInfo$T2, tz ='America/Los_Angeles') # convert end times to datetime format
-
-picarro_cals <- picarro_v2[setDT(calInfo), on = .(TIMESTAMP >= T1, TIMESTAMP <= T2), # subsets picarro data that is in calibration times
-                   `:=`(STANDARD_ID = STANDARD_ID)] %>% drop_na(STANDARD_ID) # appends STANDARD_ID column
+# get average measured values
+measured <- get_calib_values(calInfo)
 
 # load known standard values
 standards <- read_excel(logFile, sheet = 'STANDARDS') %>% filter(STANDARD_ID %in% calInfo$STANDARD_ID) 
 standards <- standards[order(standards$STANDARD_ID),]
-
-# average measured calibration values
-measured <- picarro_cals %>% group_by(STANDARD_ID) %>% summarize(across(where(is.numeric), ~mean(.))) %>% # take average by standard_ID
-  select(STANDARD_ID, CO2_dry, CO, CH4_dry) %>% # filter just CO2_dry, CO, and CH4_dry
-  rename(CH4 = CH4_dry, CO2 = CO2_dry) # changes column names, from here on using dry values for CO2 and CH4
-measured <- measured[order(measured$STANDARD_ID),] 
 
 # plot the standard vs measured values
 par(mfrow=c(1,3))
@@ -73,24 +55,13 @@ plot(standards$CO2, measured$CO2)
 plot(standards$CO, measured$CO)
 plot(standards$CH4, measured$CH4)
 
-# calculate linear fits for each gas
-cal <- merge(standards, measured, by = "STANDARD_ID", suffixes = c(".known",".measured")) %>% # merge known and measured values
-  pivot_longer(CO2.known:CH4.measured) %>%  # convert to long format
-  separate(name, into=c("species","type")) %>% # get values from column names
-  pivot_wider(names_from = type, values_from=value) %>% # go back to wide format
-  nest(data = -species) %>%  # nest all values into groups by species
-  mutate(reg = map(data, ~lm(known ~ measured, .))) %>% # do the regression for each species
-  mutate(intercept = map_dbl(reg, ~coefficients(.)[1]), # get values from the regression
-         slope = map_dbl(reg, ~coefficients(.)[2])) %>%
-  column_to_rownames(var = "species")
+cal <- calibrate(measured, standards) # calculate coefficients for correction
   
 # apply the calibration for each gas
 picarro_gps_weather <- mutate(picarro_gps_weather, 
                               CH4_corr = CH4*cal["CH4","slope"] + cal["CH4","intercept"],
                               CO2_corr = CO2*cal["CO2","slope"] + cal["CO2","intercept"],
                               CO_corr = CO*cal["CO","slope"] + cal["CO","intercept"])
-
-
 # Exclusions --------------------------------------------------------------
 
 # only include driving times (exclude calibrations) 
@@ -98,16 +69,41 @@ driveStart <- surveyInfo$STARTUTC
 driveEnd <- surveyInfo$ENDUTC
 picarro_gps_weather <- subset(picarro_gps_weather, TIMESTAMP >= driveStart & TIMESTAMP <= driveEnd)
 
-# Save corrected data  ----------------------------------------------------
-# delete unwanted columns 
-# round numeric columns to 4 decimal places
-# write.csv(picarro_v3, file = [insert file path here])
 
+# Save corrected data  ----------------------------------------------------
+picarro_v3 <- picarro_gps_weather[, -c(2,3,5)] #delete uncalibrated gas values
+picarro_v3[,c(2:16)] <- lapply(picarro_v3[,c(2:16)], as.numeric)
+picarro_v3 <- picarro_v3[, lapply(.SD, round, 4), TIMESTAMP] #round all numeric columns to 4 decimal places
+picarro_v3 <- rename(picarro_v3, CH4 = CH4_corr, CO2 = CO2_corr, CO = CO_corr)
+
+#Make a csv file of level 3 version of exported picarro data;
+write.csv(picarro_v3, file=paste(v3_file_path, "picarro-G2401-",routeID,"_v3.csv", sep=""), row.names = FALSE)
+print("Calibrated data has been saved as a csv.")
+
+# Quality Control Report --------------------------------------------------
+qc <- list("Route ID" = routeID,
+           "Files found" = length(files),
+           "Level 1 length" = length(picarro_v1),
+           "Level 2 length" = length(picarro_v2),
+           "Level 3 length" = length(picarro_v3),
+           "Missing values" = sum(is.na(picarro_v3)),
+           "Negative CO2 values" = sum(picarro_v3$CO2 < 0),
+           "Negative CO values" = sum(picarro_v3$CO < 0),
+           "Negative CH4 values" = sum(picarro_v3$CH4 < 0),
+           "Minimum CO2 (ppm)" = min(picarro_v3$CO2),
+           "Minimum CO (ppb)" = min(picarro_v3$CO),
+           "Minimum CH4 (ppm)" = min(picarro_v3$CH4),
+           "Maximum CO2 (ppm)" = max(picarro_v3$CO2),
+           "Maximum CO (ppb)" = max(picarro_v3$CO),
+           "Maximum CH4 (ppm)" = max(picarro_v3$CH4)
+)
+qc
+
+par(mfrow=c(3,1))
+plot(picarro_v3$TIMESTAMP, picarro_v3$CO2)
+plot(picarro_v3$TIMESTAMP, picarro_v3$CO)
+plot(picarro_v3$TIMESTAMP, picarro_v3$CH4)
 
 # Future to do list -------------------------------------------------------
-# (1) output calibration summary statistics
-# (2) convert the calibration section into a function
-# (3) make sure the calibration section works for special cases (e.g. only calibrated once, 
-#                     only had one tank, using a different day's data to calibrate, etc.)
-# (4) Save corrected data
+# output calibration summary statistics
 
