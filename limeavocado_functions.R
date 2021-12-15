@@ -3,9 +3,6 @@
 # calibrate(picarro_gps_weather)
 # subset_driving_time(picarro_gps_weather)
 # create_level_3(picarro_gps_weather)
-# time_average(picarro_gps_weather)
-# regrid(picarro_gps_weather)
-
 
 get_files <- function(surveyInfo, in_path) {
   #############################################################################################
@@ -53,6 +50,15 @@ create_level_1 <- function(files, out_path) {
   picarro_v1$TIMESTAMP <- as.POSIXct(paste(picarro_v1$DATE, picarro_v1$TIME), tz="UTC", format="%Y-%m-%d %H:%M:%S") # combines DATE and TIME columns
   picarro_v1$CH4 <- picarro_v1$CH4/1000 # unit conversions for methane
   picarro_v1$CH4_dry <- picarro_v1$CH4_dry/1000 # unit conversions for methane
+  
+  # add quality control flags
+  picarro_v1 <- mutate(picarro_v1,
+                       Flag = case_when(
+                         CavityPressure < 139.9 | CavityPressure > 140.1 ~ "P", # pressure out of range
+                         CavityTemp < 44.98 | CavityTemp > 45.02         ~ "T", # temperature out of range
+                         H2O > 10                                        ~ "W", # water too high
+                         TIMESTAMP - lag(TIMESTAMP) > 8                  ~ "C", # cycle time too high
+                       ))
   write.csv(picarro_v1, file=paste(out_path,"picarro-G2401-",routeID,"_v1.csv", sep="")) # Export level 1 file
   
   return(picarro_v1)
@@ -69,8 +75,8 @@ create_level_2 <- function(picarro_v1, offset_seconds, out_path) {
   # output: 
   #     picarro_v2 = level 2 version of picarro data 
   #############################################################################################
-  
-  picarro_v2 <- select(picarro_v1, TIMESTAMP, CH4, CH4_dry, CO2, CO2_dry, H2O, CO) # select only columns of interest in the order you want them
+  picarro_v2 <- subset(picarro_v1, is.na(Flag) | Flag == "C") # get only values that passed L1 QAQC (letting C errors pass for now)
+  picarro_v2 <- select(picarro_v2, TIMESTAMP, CH4, CH4_dry, CO2, CO2_dry, H2O, CO) # select only columns of interest in the order you want them
   picarro_v2 <- picarro_v2[, lapply(.SD, round, 4), TIMESTAMP]   # Round all numeric columns to 4 decimal places
   picarro_v2$TIMESTAMP <- picarro_v2$TIMESTAMP - seconds(offset_seconds) # correct time offset
   write.csv(picarro_v2, file=paste(out_path, "picarro-G2401-",routeID,"_v2.csv", sep="")) # Export level 2 file
@@ -101,67 +107,3 @@ merge_picarro_datalogger <- function(picarro_v2, gpsfile, weatherfile) {
   return(picarro_gps_weather)
   
 }
-
-## UNDER CONSTRUCTION!!!
-subset_calib_manually <- function(data, t1_est, t2_est) {
-  #############################################################################################
-  # function mission: interactively subsets the times when you were calibrating. For use when you have a range of times but don't know 
-  #                     EXACTLY when the standard measurements started and ended. The function will plot the range of times you give it
-  #                     and you can interactively choose the start and end times by clicking on the plot. You can then save these values
-  #                     into your logs.xlsx file so you don't need to do it manually next time.
-  # inputs: 
-  #     (1) data = a dataframe with the values you are going to calibrate (picarro_gps_weather)
-  #     (2) t1_est = estimated start times
-  #     (3) t2_est = estimated end times
-  # output: 
-  #     (1) sub = subsetted data for chosen times 
-  #     (2) t1 = actual calibration start
-  #     (3) t2 = actual calibration end
-  #############################################################################################
-  # if TIME_EST = TRUE, will make you choose start/end times interactively
-  
-  # create plot of this time range to select final calibration start and end
-  temp <- subset(picarro_v2, TIMESTAMP >= t1 & TIMESTAMP <= t2)
-  print("Select the beginning and end of the calibration on the plot, then click Finish")
-  plot(temp$TIMESTAMP, temp$CO2_dry)
-  rows <- identify(temp$TIMESTAMP, temp$CO2_dry)
-  act_calib_times <- temp[rows,TIMESTAMP]
-  # subset the data
-  sub <- subset(picarro_v2, TIMESTAMP >= act_calib_times[1] & TIMESTAMP <= act_calib_times[2])
-  
-  # save actual calibration times to logs.xlsx file
-  # https://stackoverflow.com/questions/32632137/using-write-xlsx-in-r-how-to-write-in-a-specific-row-or-column-in-excel-file
-  # library(xlsx)
-  # # load file contents
-  # file <- "yourfilename.xlsx"
-  # wb <- loadWorkbook(file)
-  # sheets <- getSheets(wb)
-  # sheet <- sheets[[1]]  # or another
-  # # data to put into B10:H20 range
-  # data <- matrix(runif(7*11), nrow=11, ncol=7)
-  # # modify contents
-  # addDataFrame(data, sheet, col.names = FALSE, row.names = FALSE,
-  #              startRow = 10, startColumn = 2)
-  # # save to disk
-  # saveWorkbook(wb, file)
-  
-  # if TIME_EST = FALSE, will use the exact values
-  sub <- subset(picarro_v2, TIMESTAMP >= t1 & TIMESTAMP <= t2)
-
-  return(sub)
-}
-
-# UNDER CONSTRUCTION
-# calibrate <- function(picarro_gps_weather, calib_details)
-# {
-#   # subset first calibration ("AM")
-#   if (strftime(calib_details$UTC1START, format="%H:%M:%S") != "00:00:00") {
-#     sub1 <- subset_calib(calib_details$UTC1START, calib_details$UTC1END)
-#   }
-#   
-#   # subset second calibration ("PM")
-#   if (strftime(calib_details$UTC2START, format="%H:%M:%S") != "00:00:00") {
-#     sub2 <- subset_calib(calib_details$UTC2START, calib_details$UTC2END)
-#   }
-#   
-# }
