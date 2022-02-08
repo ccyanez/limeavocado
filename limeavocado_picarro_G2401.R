@@ -5,9 +5,12 @@
 
 # User inputs -------------------------------------------------------------
 rm(list = ls())
-routeID <- "20190731" # enter routeID for survey
+routeID <- "20210715" # enter routeID for survey
 
-main <- '/Volumes/cindrive/ucrlimeavocado/Data/' # main path to data, all other paths are relative to this one
+# setwd('E:/')
+
+# main <- '/Volumes/cindrive/ucrlimeavocado/Data/' # main path to data, all other paths are relative to this one
+main <- 'E:/ucrlimeavocado/Data/'
 logFile <- paste(main, 'logs2.xlsx', sep='') # path to log file with metadata
 raw_file_path <- paste(main, 'raw/Picarro G2401/', sep = '') # input path to raw Picarro files
 v1_file_path <- paste(main, 'processed/Level01/Picarro G2401/', sep='') # output path for Level 1 files
@@ -26,10 +29,10 @@ library(dplyr)
 library(readxl)
 library(purrr)
 library(gdata)
-source('~/limeavocado/limeavocado_functions.R')
-source('~/limeavocado/get_calib_values.R')
-source('~/limeavocado/calibrate.R')
-source('~/limeavocado/flagCO.R')
+source('C:/Users/cindy/limeavocado/limeavocado_functions.R')
+source('C:/Users/cindy/limeavocado/get_calib_values.R')
+source('C:/Users/cindy/limeavocado/calibrate.R')
+# source('C:/Users/cindy/limeavocado/flagCO.R')
 
 # Level 1 Processing ------------------------------------------------------------
 surveyInfo = read_excel(logFile, sheet = 'GENERAL') %>% filter(ID == routeID) # import general survey information from log file
@@ -50,7 +53,7 @@ calInfo <- read_excel(logFile, sheet = 'CALESTIMATES') %>% filter(ID == routeID)
 
 # get average measured values
 # if don't have external file for calibrations, create one before continuing
-source('~/limeavocado/create_cal_summary.R')
+source('C:/Users/cindy/limeavocado/create_cal_summary.R')
 if (sum(is.na(calInfo$EXTFILE)) > 0) { 
   test <- create_cal_summary(calInfo, picarro_v2)
 }

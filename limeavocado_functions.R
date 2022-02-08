@@ -61,7 +61,7 @@ create_level_1 <- function(files, out_path) {
                        ))
   
   # CO flags for 2019 data 
-  picarro_v1 <- flagCO(picarro_v1, start = picarro_v1$TIMESTAMP[1])
+  # picarro_v1 <- flagCO(picarro_v1, start = picarro_v1$TIMESTAMP[1])
   
   write.csv(picarro_v1, file=paste(out_path,"picarro-G2401-",routeID,"_v1.csv", sep="")) # Export level 1 file
   print("Level 1 data has been created and exported")
