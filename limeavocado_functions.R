@@ -50,7 +50,7 @@ create_level_1 <- function(files, out_path) {
   picarro_v1$TIMESTAMP <- as.POSIXct(paste(picarro_v1$DATE, picarro_v1$TIME), tz="UTC", format="%Y-%m-%d %H:%M:%S") # combines DATE and TIME columns
   picarro_v1$CH4 <- picarro_v1$CH4/1000 # unit conversions for methane
   picarro_v1$CH4_dry <- picarro_v1$CH4_dry/1000 # unit conversions for methane
-  
+
   # add quality control flags
   picarro_v1 <- mutate(picarro_v1,
                        Flag = case_when(
@@ -59,7 +59,12 @@ create_level_1 <- function(files, out_path) {
                          H2O > 10                                        ~ "W", # water too high
                          TIMESTAMP - lag(TIMESTAMP) > 8                  ~ "C", # cycle time too high
                        ))
+  
+  # CO flags for 2019 data 
+  picarro_v1 <- flagCO(picarro_v1, start = picarro_v1$TIMESTAMP[1])
+  
   write.csv(picarro_v1, file=paste(out_path,"picarro-G2401-",routeID,"_v1.csv", sep="")) # Export level 1 file
+  print("Level 1 data has been created and exported")
   
   return(picarro_v1)
 }

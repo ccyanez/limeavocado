@@ -1,11 +1,11 @@
 ## Script for processing of Picarro G2401 data 
 ## Author: Cindy Yanez
-## Last revised: Nov. 22, 2021
+## Last revised: February 6, 2022
 # See README.txt file for definition of data levels
 
 # User inputs -------------------------------------------------------------
 rm(list = ls())
-routeID <- "20210715" # enter routeID for survey
+routeID <- "20190731" # enter routeID for survey
 
 main <- '/Volumes/cindrive/ucrlimeavocado/Data/' # main path to data, all other paths are relative to this one
 logFile <- paste(main, 'logs2.xlsx', sep='') # path to log file with metadata
@@ -29,12 +29,12 @@ library(gdata)
 source('~/limeavocado/limeavocado_functions.R')
 source('~/limeavocado/get_calib_values.R')
 source('~/limeavocado/calibrate.R')
+source('~/limeavocado/flagCO.R')
 
 # Level 1 Processing ------------------------------------------------------------
 surveyInfo = read_excel(logFile, sheet = 'GENERAL') %>% filter(ID == routeID) # import general survey information from log file
 files = get_files(surveyInfo, in_path = raw_file_path)  # Finds the data files in your computer using survey info
 picarro_v1 = create_level_1(files, v1_file_path) # Level 1 data gets exported
-print("Level 1 data has been created and exported")
 
 # Level 2 Processing ------------------------------------------------------------
 offset <- read_excel(logFile, sheet = 'TIMEOFFSET') %>% filter(ID == routeID) # import Picarro G2401 time offset
@@ -72,6 +72,10 @@ picarro_gps_weather <- mutate(picarro_gps_weather,
                               CO2_corr = CO2*cal["CO2","slope"] + cal["CO2","intercept"],
                               CO_corr = CO*cal["CO","slope"] + cal["CO","intercept"])
 # Exclusions --------------------------------------------------------------
+# flag CO values (2019 data) 
+picarro_gps_weather <- flagCO(picarro_gps_weather, start = picarro_v1$TIMESTAMP[1])
+# make CO = NA if any CO values were flagged by flagCO() function
+picarro_gps_weather$CO_corr[!is.na(picarro_gps_weather$CO_flag)] <- NA
 
 # only include driving times (exclude calibrations) 
 driveStart <- surveyInfo$STARTUTC
@@ -87,13 +91,13 @@ picarro_v3 <- mutate(picarro_gps_weather,
                                       CO2_corr <0 ~ "Neg_co2",
                                       CH4_corr <0 ~ "Neg_ch4",
                                       is.na(CO2_corr) ~ "NA_co2",
-                                      is.na(CO_corr) ~ "NA_co",
+                                      # is.na(CO_corr) ~ "NA_co",
                                       is.na(CH4_corr) ~ "NA_ch4")) 
 
 picarro_v3 <- subset(picarro_v3, is.na(Flag)) # get only values that do not qualify as anomalous
 
 # Save corrected data  ----------------------------------------------------
-picarro_v3 <- picarro_v3[, -c(2,3,5,20)] #delete uncalibrated gas values & flag column
+picarro_v3 <- picarro_v3[, -c(2,3,5,20,21)] #delete uncalibrated gas values & flag column
 picarro_v3[,c(2:16)] <- lapply(picarro_v3[,c(2:16)], as.numeric)
 picarro_v3 <- picarro_v3[, lapply(.SD, round, 4), TIMESTAMP] #round all numeric columns to 4 decimal places
 picarro_v3 <- rename(picarro_v3, CH4 = CH4_corr, CO2 = CO2_corr, CO = CO_corr)
@@ -113,19 +117,20 @@ print("Calibrated data has been saved as a csv.")
            "T Flags" = sum(picarro_v1$Flag == "T", na.rm = TRUE),
            "W Flags" = sum(picarro_v1$Flag == "W", na.rm = TRUE),
            "C Flags" = sum(picarro_v1$Flag == "C", na.rm = TRUE),
-           "Missing values" = sum(is.na(picarro_gps_weather)),
+           "CO Flags" = sum(!is.na(picarro_gps_weather$CO_flag)),
+           "Missing values" = sum(is.na(picarro_v3)),
            "Negative CO2 values" = sum(picarro_gps_weather$CO2 < 0, na.rm = TRUE),
            "Negative CO values" = sum(picarro_gps_weather$CO < 0, na.rm = TRUE),
            "Negative CH4 values" = sum(picarro_gps_weather$CH4 < 0, na.rm = TRUE),
            "CO2 > 3000 ppm" = sum(picarro_gps_weather$CO2 > 3000, na.rm = TRUE),
            "CO > 100000 ppb" = sum(picarro_gps_weather$CO > 100000, na.rm = TRUE),
            "CH4 > 20 ppm" = sum(picarro_gps_weather$CH4 > 20, na.rm = TRUE),
-           "Minimum CO2 (ppm)" = min(picarro_v3$CO2),
-           "Minimum CO (ppb)" = min(picarro_v3$CO),
-           "Minimum CH4 (ppm)" = min(picarro_v3$CH4),
-           "Maximum CO2 (ppm)" = max(picarro_v3$CO2),
-           "Maximum CO (ppb)" = max(picarro_v3$CO),
-           "Maximum CH4 (ppm)" = max(picarro_v3$CH4),
+           "Minimum CO2 (ppm)" = min(picarro_v3$CO2, na.rm = TRUE),
+           "Minimum CO (ppb)" = min(picarro_v3$CO, na.rm = TRUE),
+           "Minimum CH4 (ppm)" = min(picarro_v3$CH4, na.rm = TRUE),
+           "Maximum CO2 (ppm)" = max(picarro_v3$CO2, na.rm = TRUE),
+           "Maximum CO (ppb)" = max(picarro_v3$CO, na.rm = TRUE),
+           "Maximum CH4 (ppm)" = max(picarro_v3$CH4, na.rm = TRUE),
            "CO2 cal type" = cal["CO2","points"],
            "CO cal type" = cal["CO","points"],
            "CH4 cal type" = cal["CH4","points"],

@@ -4,9 +4,10 @@ library(dplyr)
 library(readxl)
 
 # load data
-year <- '2021'
-main <- '/Volumes/cindrive/COVID/Data/PeMS/'
-df <- read.csv(paste(main, 'd07_text_station_hour_',year,'_07.txt', sep = ''), header = FALSE)
+year <- '2013'
+month <- '06'
+main <- '/Volumes/cindrive/COVID/Data/PeMS/raw/'
+df <- read.csv(paste(main, 'd07_text_station_hour_',year,'_',month,'.txt', sep = ''), header = FALSE)
 
 # select only essential columns
 # ignored lane-specific values (only looked station-wide)
@@ -33,8 +34,10 @@ df <- filter(df, lanetype == "ML")
 df <- filter(df, observed > 90)
 
 # read in survey dates from metadata file 
-dates <- read_excel('~/Documents/COVID_AirQuality/Data/LIMEAVOCADO/level03/metadata.xlsx', sheet = 'dates') %>% 
+dates <- read_excel('~/Documents/CO-CO2/Data//metadata.xlsx', sheet = 'dates') %>%
   select(paste("LA",year,sep="")) %>% na.omit()
+# dates <- read_excel('~/Documents/COVID_AirQuality/Data/LIMEAVOCADO/level03/metadata.xlsx', sheet = 'dates') %>% 
+#   select(paste("LA",year,sep="")) %>% na.omit()
 colnames(dates) <- "date"
 dates$date <- as.Date(dates$date)
 
