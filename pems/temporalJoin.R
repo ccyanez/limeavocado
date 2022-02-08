@@ -6,16 +6,18 @@ library(dplyr)
 library(lubridate)
 
 # load data
-year <- '2021'
-main <- '/Volumes/cindrive/COVID/Data/PeMS/joined/'
-df <- read.csv(paste(main, 'pems_CO2xs_',year,'.txt', sep = '')) %>%
+year <- "2019"
+# main <- '/Volumes/cindrive/COVID/Data/PeMS/' # mac file path
+main <- "E:/COVID/Data/PeMS/" # windows file path
+
+df <- read.csv(paste(main, "joined/pems_CO2xs_",year,".txt", sep = "")) %>%
   rename(timestamp = "timestamp_")
 
 # convert both datasets to same time zone
-df$timestamp <- as.POSIXct(df$timestamp, 
+df$timestamp <- as.POSIXct(df$timestamp,
                            format = '%m/%d/%Y %H:%M:%S',
                            tz = "America/Los_Angeles")
-df$TIMESTAMP1 <- as.POSIXct(df$TIMESTAMP1, 
+df$TIMESTAMP1 <- as.POSIXct(df$TIMESTAMP1,
                             format = '%m/%d/%Y %H:%M:%S',
                             tz = "UTC")
 df$TIMESTAMP1 <- with_tz(df$TIMESTAMP1, tzone = "America/Los_Angeles")
@@ -27,15 +29,10 @@ df <- mutate(df, timediff = timestamp - TIMESTAMP1)
 df <- filter(df, abs(timediff) <= 3600)
 
 # keep the closest match for each station
-match <- df %>% 
-  group_by(station) %>% 
-  mutate(match = ifelse(abs(timediff) == min(abs(timediff)), "best","0")) %>% 
+match <- df %>%
+  group_by(station) %>%
+  mutate(match = ifelse(abs(timediff) == min(abs(timediff)), "best","0")) %>%
   filter(match == "best")
 
-# # test plot to see how the correlation looks
-# plot(match$flow, match$CO2xs)
-# plot(match$flow, match$CO)
-# plot(match$CO, match$CO2xs)
-# plot(match$timestamp, match$flow)
-# fit <- lm(flow ~ CO2xs, data = match)
-# summary(fit)
+# export the results 
+write.csv(match, file = paste(main, "matched/pems_CO2xs_matched_",year,".csv", sep=""))
