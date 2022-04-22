@@ -6,9 +6,9 @@ flagCO <- function(data, start) {
     data <- mutate(data, CO_flag = case_when(TIMESTAMP <= start + 3600 ~ "first"))
   }
   
-  # # don't use CO data from 20190715, calibrations were bad
-  # if (routeID == "20190715") {
-  #   data <- mutate(data, CO_flag = "all")
-  # }
+  # don't use CO data from 20190715, calibrations were bad
+  if (routeID == "20190715") {
+    data <- mutate(data, CO_flag = "all")
+  }
   
 }

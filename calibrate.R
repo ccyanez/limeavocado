@@ -12,10 +12,10 @@ calibrate <- function(measured, standards) {
     mutate(reg = map(data, ~lm(known ~ measured, .)), points = map(data, ~nrow(.))) %>% 
     mutate(intercept = case_when(
       points == 2 ~ map_dbl(reg, ~coefficients(.)[1]), # get values from the regression
-      points == 1 ~ 0),
+      points == 1 ~ 0), # if one point calibration, y-intercept = 0
       slope = case_when(
         points == 2 ~ map(reg, ~ coefficients(.)[2][[1]]),
-        points == 1 ~ map(data, ~ .x$known / .x$measured))) %>%
+        points == 1 ~ map(data, ~ .x$known / .x$measured))) %>% # if 1-point cal, slope is just the ratio known/measured
     column_to_rownames(var = "species")
   
   # convert columns to numeric 

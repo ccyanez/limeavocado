@@ -5,7 +5,7 @@
 
 # User inputs -------------------------------------------------------------
 rm(list = ls())
-routeID <- "20210715" # enter routeID for survey
+routeID <- "20190715" # enter routeID for survey
 
 # setwd('E:/')
 
@@ -16,7 +16,7 @@ raw_file_path <- paste(main, 'raw/Picarro G2401/', sep = '') # input path to raw
 v1_file_path <- paste(main, 'processed/Level01/Picarro G2401/', sep='') # output path for Level 1 files
 v2_file_path <- paste(main, 'processed/Level02/Picarro G2401/', sep='') # output path for Level 2 files
 calSum_file_path <- paste(main, 'processed/calibration_summary/', sep='') # output path for calibration summary files
-v3_file_path <- paste(main, 'processed/Level03/Picarro G2401/', sep='') # output path for Level 3 files
+v3_file_path <- paste(main, 'processed/Level03/PicarroG2401/', sep='') # output path for Level 3 files
 report_file_path <- paste(main,'reports/Picarro G2401/',sep='') # output path for processing report
 qaqc_file_path <- paste(main, 'processed/qaqc/Picarro G2401/', sep='') # output path for qaqc report
 
@@ -32,7 +32,7 @@ library(gdata)
 source('C:/Users/cindy/limeavocado/limeavocado_functions.R')
 source('C:/Users/cindy/limeavocado/get_calib_values.R')
 source('C:/Users/cindy/limeavocado/calibrate.R')
-# source('C:/Users/cindy/limeavocado/flagCO.R')
+source('C:/Users/cindy/limeavocado/flagCO.R')
 
 # Level 1 Processing ------------------------------------------------------------
 surveyInfo = read_excel(logFile, sheet = 'GENERAL') %>% filter(ID == routeID) # import general survey information from log file
@@ -42,7 +42,6 @@ picarro_v1 = create_level_1(files, v1_file_path) # Level 1 data gets exported
 # Level 2 Processing ------------------------------------------------------------
 offset <- read_excel(logFile, sheet = 'TIMEOFFSET') %>% filter(ID == routeID) # import Picarro G2401 time offset
 picarro_v2 <- create_level_2(picarro_v1, offset$G2401, v2_file_path) # Level 2 data gets exported
-print("Level 2 data has been created and exported")
 
 # Level 3 Processing  ---------------------------------------------
 picarro_gps_weather <- merge_picarro_datalogger(picarro_v2, paste(main, surveyInfo$GPSFILE,sep=""), paste(main,surveyInfo$WEATHERFILE,sep="")) %>% # merge Level 2 data with gps and weather
@@ -89,7 +88,7 @@ picarro_gps_weather <- subset(picarro_gps_weather, TIMESTAMP >= driveStart & TIM
 picarro_v3 <- mutate(picarro_gps_weather, 
                      Flag = case_when(CO_corr >= 100000   ~ "S_co", # CO anomaly
                                       CO2_corr >= 3000  ~ "S_co2", # CO2 anomaly
-                                      CH4_corr >= 20 ~ "S_ch4", # CH4 anomaly
+                                      CH4_corr >= 20000 ~ "S_ch4", # CH4 anomaly
                                       CO_corr < 0 ~ "Neg_co",
                                       CO2_corr <0 ~ "Neg_co2",
                                       CH4_corr <0 ~ "Neg_ch4",
@@ -101,7 +100,7 @@ picarro_v3 <- subset(picarro_v3, is.na(Flag)) # get only values that do not qual
 
 # Save corrected data  ----------------------------------------------------
 picarro_v3 <- picarro_v3[, -c(2,3,5,20,21)] #delete uncalibrated gas values & flag column
-picarro_v3[,c(2:16)] <- lapply(picarro_v3[,c(2:16)], as.numeric)
+picarro_v3[,c(2:16)] <- lapply(picarro_v3[,c(2:16)], as.numeric) # convert to numeric (all cols except timestamp)
 picarro_v3 <- picarro_v3[, lapply(.SD, round, 4), TIMESTAMP] #round all numeric columns to 4 decimal places
 picarro_v3 <- rename(picarro_v3, CH4 = CH4_corr, CO2 = CO2_corr, CO = CO_corr)
 
@@ -179,11 +178,11 @@ plot(standards$CH4, measured$CH4, pch = 19, cex = 1.5)
 # # plot timeseries for each gas
 par(mfrow=c(1,1))
 plot(picarro_v3$TIMESTAMP, picarro_v3$CO2)
-plot(picarro_v3$TIMESTAMP, picarro_v3$CO)
+# plot(picarro_v3$TIMESTAMP, picarro_v3$CO)
 plot(picarro_v3$TIMESTAMP, picarro_v3$CH4)
 
 # produce a report (run the following code in the console)
-# rmarkdown::render(input = "~/limeavocado/limeavocado_picarro_G2401.R",
+# rmarkdown::render(input = "C:\Users\cindy\limeavocado\limeavocado_picarro_G2401.R",
 #                   output_format = "pdf_document",
 #                   output_file = paste(report_file_path,"picarro_G2401_processing_report_",routeID,".pdf", sep=""))
 
